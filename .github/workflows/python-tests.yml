@@ -23,3 +23,7 @@ jobs:
         run: |
           node --check web/app.js
           node --check web/sw.js
+          node --check chrome_bridge/content.js
+          node --check chrome_bridge/background.js
+          node --check chrome_bridge/popup.js
+          python -m json.tool chrome_bridge/manifest.json > /dev/null

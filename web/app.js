@@ -499,7 +499,7 @@ function render() {
   const competitions = [...new Set(liveList.map((m) => m.competition || 'e-Piłka nożna live'))].sort((a, b) => a.localeCompare(b, 'pl'));
   const competitionSelect = $('competitionFilter');
   const selectedCompetition = competitionSelect.value;
-  if (competitions.join('|') !== [...state.competitionOptions].sort().join('|')) {
+  if (competitions.join('|') !== [...state.competitionOptions].sort((a, b) => a.localeCompare(b, 'pl')).join('|')) {
     state.competitionOptions = new Set(competitions);
     competitionSelect.innerHTML = '<option value="all">Wszystkie rozgrywki LIVE</option>' + competitions.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
     competitionSelect.value = competitions.includes(selectedCompetition) ? selectedCompetition : 'all';
