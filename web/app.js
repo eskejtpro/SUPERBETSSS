@@ -30,7 +30,6 @@ const DEFAULT_SETTINGS = {
 const state = {
   matches: [],
   selected: null,
-  isDemo: false,
   fetchedAtMs: Date.now(),
   nextRefreshAtMs: Date.now() + 20_000,
   superbetOffsetMs: 0,
@@ -41,7 +40,6 @@ const state = {
   settings: { ...DEFAULT_SETTINGS },
   view: 'table',
   swRegistration: null,
-  bgWorker: null,
   audioCtx: null,
   notifiedMap: new Map(),
   notifyHistory: [],
@@ -122,11 +120,7 @@ function liveMatch(match, deltaSec) {
         : (half - 1) * halfSeconds + Math.min(clockSec, halfSeconds) + (half === 2 ? breakSec : 0);
 
     let pos = baseElapsedFromStart + deltaSec;
-    if (state.isDemo) {
-      pos = pos % totalCycle;
-    } else {
-      pos = Math.min(pos, totalCycle);
-    }
+    pos = Math.min(pos, totalCycle);
 
     let projectedHalf = 1;
     let projectedClock = 0;
@@ -498,7 +492,7 @@ function render() {
   $('nextMatchNote').textContent = next ? `${matchName(next)}${next.estimated_end_at ? ` · koniec ~${formatTimeShort(next.estimated_end_at)}` : ''}` : 'brak danych';
   if (state.sourceAgeBase != null) {
     const deltaSec = Math.max(0, Math.floor((Date.now() - state.fetchedAtMs) / 1000));
-    const ageNow = state.isDemo ? (state.sourceAgeBase + deltaSec) % 20 : state.sourceAgeBase + deltaSec;
+    const ageNow = state.sourceAgeBase + deltaSec;
     $('sourceAge').textContent = `${ageNow}s`;
   }
 
@@ -599,7 +593,6 @@ async function loadLive() {
     if (!response.ok) throw new Error('HTTP');
     const data = await response.json();
     const nowMs = Date.now();
-    state.isDemo = Boolean(data.is_demo);
     state.fetchedAtMs = nowMs;
     state.nextRefreshAtMs = nowMs + 20_000;
     state.superbetOffsetMs = data.superbet_time && !Number.isNaN(Date.parse(data.superbet_time)) ? Date.parse(data.superbet_time) - nowMs : 0;
@@ -612,10 +605,10 @@ async function loadLive() {
       score_label: score(m),
       half_label: m.half_label || (m.half ? `${m.half}. połowa` : 'brak'),
     }));
-    $('connectionBadge').textContent = data.is_demo ? 'Dane testowe (DEMO)' : data.source_online ? 'Źródło aktualne' : 'Brak aktualnych danych';
-    $('connectionBadge').className = data.is_demo ? 'badge badge-warn' : data.source_online ? 'badge badge-ok' : 'badge badge-warn';
+    $('connectionBadge').textContent = data.source_online ? 'Źródło aktualne' : 'Brak aktualnych danych';
+    $('connectionBadge').className = data.source_online ? 'badge badge-ok' : 'badge badge-warn';
     $('sourceAge').textContent = data.source_age_seconds != null ? `${data.source_age_seconds}s` : '—';
-    $('sourceNote').textContent = data.is_demo ? 'tryb demonstracyjny (DEMO)' : data.source_online ? 'ostatni sygnał Chrome' : data.source_status === 'stale' ? 'sygnał jest nieaktualny' : 'oczekiwanie na Chrome';
+    $('sourceNote').textContent = data.source_online ? 'ostatni sygnał Chrome' : data.source_status === 'stale' ? 'sygnał jest nieaktualny' : 'oczekiwanie na Chrome';
     $('lastUpdate').textContent = `Ostatni odczyt panelu: ${new Date(nowMs).toLocaleTimeString('pl-PL')}`;
     render();
   } catch (_) {

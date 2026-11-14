@@ -272,7 +272,6 @@ class LiveState:
             "server_time": utc_now(),
             "superbet_time": None,
             "superbet_time_label": None,
-            "is_demo": False,
         }
 
     @staticmethod
