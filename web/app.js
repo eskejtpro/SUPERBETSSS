@@ -50,6 +50,7 @@ const state = {
   notifyTotalSent: 0,
   notifyCollapsed: false,
   advantageHistory: [],
+  competitionOptions: new Set(),
 };
 
 const $ = (id) => document.getElementById(id);
@@ -387,9 +388,11 @@ function filteredMatches(liveList) {
   const half = $('halfFilter').value;
   const status = $('statusFilter').value;
   const hlFilter = $('highlightFilter').value;
+  const competition = $('competitionFilter').value;
   const list = liveList.filter((m) => {
     const haystack = `${m.home} ${m.away} ${m.competition}`.toLowerCase();
     if (query && !haystack.includes(query)) return false;
+    if (competition !== 'all' && (m.competition || 'e-Piłka nożna live') !== competition) return false;
     if (half !== 'all' && String(m.half) !== half) return false;
     if (status !== 'all' && m.status !== status) return false;
     if (m.is_live === false) return false;
@@ -493,7 +496,15 @@ function render() {
   const list = filteredMatches(liveList);
   $('resultCount').textContent = `${list.length} wyników`;
   $('totalMatches').textContent = liveList.length;
-  $('secondHalf').textContent = liveList.filter((m) => Number(m.half) === 2).length;
+  const competitions = [...new Set(liveList.map((m) => m.competition || 'e-Piłka nożna live'))].sort((a, b) => a.localeCompare(b, 'pl'));
+  const competitionSelect = $('competitionFilter');
+  const selectedCompetition = competitionSelect.value;
+  if (competitions.join('|') !== [...state.competitionOptions].sort().join('|')) {
+    state.competitionOptions = new Set(competitions);
+    competitionSelect.innerHTML = '<option value="all">Wszystkie rozgrywki LIVE</option>' + competitions.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
+    competitionSelect.value = competitions.includes(selectedCompetition) ? selectedCompetition : 'all';
+  }
+  $('competitionCount').textContent = competitions.length;
   const next = [...liveList].sort((a, b) => (a.remaining_seconds ?? 999999) - (b.remaining_seconds ?? 999999))[0];
   $('nextMatch').textContent = next ? remaining(next) : '—';
   $('nextMatchNote').textContent = next ? `${matchName(next)}${next.estimated_end_at ? ` · koniec ~${formatTimeShort(next.estimated_end_at)}` : ''}` : 'brak danych';
@@ -1084,9 +1095,10 @@ $('refreshBtn').addEventListener('click', () => {
   startPolling();
   loadLive();
 });
-['searchInput', 'halfFilter', 'statusFilter', 'highlightFilter', 'sortSelect'].forEach((id) => $(id).addEventListener('input', render));
+['searchInput', 'competitionFilter', 'halfFilter', 'statusFilter', 'highlightFilter', 'sortSelect'].forEach((id) => $(id).addEventListener('input', render));
 $('clearFilters').addEventListener('click', () => {
   $('searchInput').value = '';
+  $('competitionFilter').value = 'all';
   $('halfFilter').value = 'all';
   $('statusFilter').value = 'all';
   $('highlightFilter').value = 'all';

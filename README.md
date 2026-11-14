@@ -6,6 +6,8 @@ Uruchomienie: `python app.py` lub `Uruchom panel.bat`. Panel działa lokalnie po
 
 ## Funkcje
 - Odczyt meczów z aktualnie załadowanego DOM Superbet przez rozszerzenie Chrome.
+- Ręczne skanowanie całej strony e-piłki LIVE: rozszerzenie przewija listę, doładowuje kolejne sekcje i zbiera wykryte spotkania.
+- Filtr „Wszystkie rozgrywki LIVE” oraz wybór konkretnej ligi/turnieju; licznik wykrytych rozgrywek.
 - Losowe odświeżanie danych co 18–28 sekund i sortowanie według szacowanego czasu do końca.
 - Cztery reguły podświetlania: potwierdzona przewaga, potencjalna przewaga, wysokie tempo bramkowe i wyrównana końcówka.
 - Konfigurowalne progi i kolory, powiadomienia przeglądarkowe, sygnał dźwiękowy i historia alertów w bieżącej sesji.

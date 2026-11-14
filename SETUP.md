@@ -7,4 +7,4 @@
 5. Uruchom `python app.py` albo `Uruchom panel.bat`.
 6. Panel otworzy się pod `http://127.0.0.1:8765`.
 
-Rozszerzenie odczytuje wyłącznie dane widoczne w aktualnie załadowanym DOM. Panel odświeża dane w losowym odstępie 18–28 sekund. Mecze, których wyliczony czas do końca minął, są automatycznie usuwane z listy. W wersji użytkowej nie ma fikcyjnych meczów ani testowych alertów. Historia spotkań z przewagą jest przechowywana w lokalnej bazie SQLite.
+Rozszerzenie odczytuje dane z aktualnej strony e-piłki LIVE. Aby zebrać dalsze sekcje listy, kliknij ikonę dodatku i wybierz „Skanuj wszystkie rozgrywki LIVE”; rozszerzenie przewinie stronę, doładuje kolejne sekcje i wróci do poprzedniej pozycji. Panel odświeża dane w losowym odstępie 18–28 sekund. Mecze, których wyliczony czas do końca minął, są automatycznie usuwane z listy. W wersji użytkowej nie ma fikcyjnych meczów ani testowych alertów. Historia spotkań z przewagą jest przechowywana w lokalnej bazie SQLite.

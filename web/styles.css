@@ -8,3 +8,5 @@
 
 
 .advantage-history-panel{margin:0 0 18px}.advantage-history-panel .table-wrap{max-height:420px;overflow:auto}.advantage-history-panel td{font-size:11px}.advantage-history-note{padding:0 18px 14px;margin:0}.advantage-history-panel .panel-head{gap:12px;flex-wrap:wrap}.advantage-history-panel .top-actions{flex-wrap:wrap}.advantage-history-panel tbody tr{cursor:default}.advantage-history-panel tbody tr:hover{background:transparent}
+
+.scan-hint{margin:0 0 12px;padding:10px 12px;border:1px solid var(--border-color);border-radius:9px;background:var(--panel-soft,rgba(120,140,170,.07));font-size:12px;color:var(--muted)}.scan-hint strong{color:var(--text)}#competitionFilter{min-width:190px;max-width:260px}
