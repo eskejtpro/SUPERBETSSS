@@ -84,6 +84,24 @@ def remaining_seconds(match: dict[str, Any]) -> int | None:
     return regular + added + (break_seconds if half == 1 else 0)
 
 
+def match_is_expired(match: dict[str, Any], now: datetime | None = None) -> bool:
+    """Return True when the estimated match end has passed since its last source snapshot."""
+    remaining = parse_int(match.get("remaining_seconds"))
+    if remaining is None:
+        return False
+    if remaining <= 0:
+        return True
+    try:
+        observed = datetime.fromisoformat(str(match.get("observed_at") or ""))
+    except ValueError:
+        return False
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    elapsed = max(0.0, (current - observed).total_seconds())
+    return elapsed >= remaining
+
+
 def normalize_match(raw: dict[str, Any], observed_at: str) -> dict[str, Any]:
     home = str(raw.get("home") or "").strip()
     away = str(raw.get("away") or "").strip()
@@ -227,9 +245,12 @@ class LiveState:
         return base + (" Zmiana: " + "; ".join(updates) + "." if updates else " Brak istotnej zmiany od poprzedniego odczytu.")
 
     def live_payload(self) -> dict[str, Any]:
+        now = datetime.now(timezone.utc)
         with self._lock:
             matches = []
             for match in self._matches.values():
+                if match_is_expired(match, now):
+                    continue
                 item = dict(match)
                 item["analysis"] = self._analysis.get(item["key"], "Brak analizy.")
                 matches.append(item)
@@ -254,7 +275,7 @@ class LiveState:
         if received_at:
             try:
                 observed = datetime.fromisoformat(received_at)
-                age_seconds = max(0, int((datetime.now(timezone.utc) - observed).total_seconds()))
+                age_seconds = max(0, int((now - observed).total_seconds()))
             except (TypeError, ValueError):
                 age_seconds = None
         source_online = age_seconds is not None and age_seconds <= 50

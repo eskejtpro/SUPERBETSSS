@@ -31,7 +31,8 @@ const state = {
   matches: [],
   selected: null,
   fetchedAtMs: Date.now(),
-  nextRefreshAtMs: Date.now() + 20_000,
+  nextRefreshAtMs: Date.now() + 18_000,
+  refreshIntervalSeconds: 18,
   superbetOffsetMs: 0,
   superbetTimeLabel: null,
   sourceAgeBase: null,
@@ -182,7 +183,9 @@ function liveMatch(match, deltaSec) {
 
 function currentLiveMatches() {
   const deltaSec = Math.max(0, Math.floor((Date.now() - state.fetchedAtMs) / 1000));
-  return state.matches.map((m) => liveMatch(m, deltaSec));
+  return state.matches
+    .map((m) => liveMatch(m, deltaSec))
+    .filter((m) => m.remaining_seconds == null || Number(m.remaining_seconds) > 0);
 }
 
 function computePrediction(match) {
@@ -594,7 +597,6 @@ async function loadLive() {
     const data = await response.json();
     const nowMs = Date.now();
     state.fetchedAtMs = nowMs;
-    state.nextRefreshAtMs = nowMs + 20_000;
     state.superbetOffsetMs = data.superbet_time && !Number.isNaN(Date.parse(data.superbet_time)) ? Date.parse(data.superbet_time) - nowMs : 0;
     state.superbetTimeLabel = data.superbet_time_label || null;
     state.sourceAgeBase = data.source_age_seconds != null ? Number(data.source_age_seconds) : null;
@@ -1014,16 +1016,21 @@ function initSwatches() {
 let pollTimer;
 let tickTimer;
 function startPolling() {
-  clearInterval(pollTimer);
+  clearTimeout(pollTimer);
   clearInterval(tickTimer);
-  state.nextRefreshAtMs = Date.now() + 20_000;
-  pollTimer = setInterval(loadLive, 20_000);
+  const intervalSeconds = 18 + Math.floor(Math.random() * 11);
+  state.refreshIntervalSeconds = intervalSeconds;
+  state.nextRefreshAtMs = Date.now() + intervalSeconds * 1_000;
+  pollTimer = setTimeout(async () => {
+    await loadLive();
+    startPolling();
+  }, intervalSeconds * 1_000);
   tickTimer = setInterval(render, 1_000);
 }
 
 $('refreshBtn').addEventListener('click', () => {
-  loadLive();
   startPolling();
+  loadLive();
 });
 ['searchInput', 'halfFilter', 'statusFilter', 'highlightFilter', 'sortSelect'].forEach((id) => $(id).addEventListener('input', render));
 $('clearFilters').addEventListener('click', () => {

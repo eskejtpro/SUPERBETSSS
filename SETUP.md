@@ -7,4 +7,4 @@
 5. Uruchom `python app.py` albo `Uruchom panel.bat`.
 6. Panel otworzy się pod `http://127.0.0.1:8765`.
 
-Rozszerzenie odczytuje wyłącznie dane widoczne w aktualnie załadowanym DOM. Panel odświeża dane co 20 sekund. W wersji użytkowej nie ma fikcyjnych meczów ani testowych alertów.
+Rozszerzenie odczytuje wyłącznie dane widoczne w aktualnie załadowanym DOM. Panel odświeża dane w losowym odstępie 18–28 sekund. Mecze, których wyliczony czas do końca minął, są automatycznie usuwane z listy. W wersji użytkowej nie ma fikcyjnych meczów ani testowych alertów.
