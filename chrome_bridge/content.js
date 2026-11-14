@@ -12,8 +12,9 @@
     const raw = clean(anchor.innerText), lines = (anchor.innerText || '').split('\n').map(clean).filter(Boolean), half = raw.match(/([12])\.\s*Połowa/i), clock = raw.match(/\b(\d+)(?:\+(\d+))?'/), marker = lines.findIndex(line => line === '1P');
     const candidates = (marker > 1 ? lines.slice(0, marker) : lines).filter(line => !/połowa/i.test(line) && !/^\d+(?:\+\d+)?'$/.test(line) && !/^[\W_]+$/u.test(line));
     const scores = marker >= 0 ? lines.slice(marker + 1).filter(line => /^\d+$/.test(line)).slice(0, 2) : [], context = contextFor(anchor);
-    return {url: anchor.href, home: candidates.at(-2) || '', away: candidates.at(-1) || '', homeScore: scores[0] ?? null, awayScore: scores[1] ?? null, half: half ? Number(half[1]) : null, clock: clock ? Number(clock[1]) * 60 + Number(clock[2] || 0) : null, clockLabel: clock ? clock[0] : '', competition: context.text, formatMinutes: context.format, status: /powróci wkrótce/i.test(raw) ? 'oferta wstrzymana' : 'aktywny'};
-  }).filter(match => match.home && match.away);
+    const isLive = Boolean(half && clock);
+    return {url: anchor.href, home: candidates.at(-2) || '', away: candidates.at(-1) || '', homeScore: scores[0] ?? null, awayScore: scores[1] ?? null, half: half ? Number(half[1]) : null, clock: clock ? Number(clock[1]) * 60 + Number(clock[2] || 0) : null, clockLabel: clock ? clock[0] : '', competition: context.text, formatMinutes: context.format, isLive, status: /powróci wkrótce/i.test(raw) ? 'oferta wstrzymana' : 'aktywny'};
+  }).filter(match => match.home && match.away && match.isLive);
   const publish = () => chrome.runtime.sendMessage({type: 'live-fifa-snapshot', matches: read()});
   publish(); setInterval(publish, 20_000);
 })();

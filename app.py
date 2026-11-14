@@ -25,11 +25,14 @@ SETTINGS_PATH = DATA_DIR / "settings.json"
 HOST, PORT = "127.0.0.1", 8765
 MAX_BODY_BYTES = 1_000_000
 DEFAULT_SETTINGS = {
-    "ui_refresh_seconds": 5,
+    "ui_refresh_seconds": 20,
     "theme": "dark",
     "default_sort": "remaining",
     "compact_mode": False,
     "show_paused": True,
+    "highlight_enabled": True,
+    "highlight_goal_difference": 3,
+    "highlight_remaining_seconds": 90,
 }
 
 
@@ -45,12 +48,17 @@ def parse_int(value: Any) -> int | None:
 
 
 def remaining_seconds(match: dict[str, Any]) -> int | None:
-    duration = parse_int(match.get("format_minutes"))
+    total_minutes = parse_int(match.get("format_minutes"))
     clock = parse_int(match.get("clock_seconds"))
     half = parse_int(match.get("half"))
-    if not duration or not half or clock is None:
+    if total_minutes is None or total_minutes <= 0 or total_minutes % 2:
         return None
-    return max(duration * 60 - min(clock, duration * 60), 0)
+    if half not in (1, 2) or clock is None or clock < 0:
+        return None
+    half_seconds = (total_minutes // 2) * 60
+    if clock > half_seconds:
+        return None
+    return max((2 - half) * half_seconds + (half_seconds - clock), 0)
 
 
 def normalize_match(raw: dict[str, Any], observed_at: str) -> dict[str, Any]:
@@ -59,6 +67,10 @@ def normalize_match(raw: dict[str, Any], observed_at: str) -> dict[str, Any]:
     if not home or not away:
         raise ValueError("Brak nazw drużyn")
     source_url = str(raw.get("url") or "").strip()
+    half = parse_int(raw.get("half"))
+    clock_seconds = parse_int(raw.get("clock"))
+    if half not in (1, 2) or clock_seconds is None or clock_seconds < 0:
+        raise ValueError("Spotkanie nie ma potwierdzonego statusu LIVE")
     match = {
         "key": f"{source_url}|{home}|{away}",
         "competition": str(raw.get("competition") or "e-Piłka nożna live").strip(),
@@ -67,10 +79,11 @@ def normalize_match(raw: dict[str, Any], observed_at: str) -> dict[str, Any]:
         "away": away,
         "home_score": parse_int(raw.get("homeScore")),
         "away_score": parse_int(raw.get("awayScore")),
-        "half": parse_int(raw.get("half")),
-        "clock_seconds": parse_int(raw.get("clock")),
+        "half": half,
+        "clock_seconds": clock_seconds,
         "clock_label": str(raw.get("clockLabel") or ""),
-        "status": str(raw.get("status") or "brak"),
+        "status": str(raw.get("status") or "aktywny"),
+        "is_live": True,
         "source_url": source_url,
         "observed_at": observed_at,
     }
@@ -185,21 +198,33 @@ class LiveState:
             received_at = self._received_at
             source_count = self._last_source_count
         matches.sort(key=self._remaining_sort_key)
+        age_seconds = None
+        if received_at:
+            try:
+                observed = datetime.fromisoformat(received_at)
+                age_seconds = max(0, int((datetime.now(timezone.utc) - observed).total_seconds()))
+            except (TypeError, ValueError):
+                age_seconds = None
+        source_online = age_seconds is not None and age_seconds <= 50
+        if not source_online:
+            matches = []
         return {
             "matches": matches,
             "count": len(matches),
             "source_count": source_count,
             "received_at": received_at,
+            "source_age_seconds": age_seconds,
+            "source_online": source_online,
+            "source_status": "online" if source_online else ("stale" if received_at else "waiting"),
             "source_interval_seconds": 20,
         }
 
     @staticmethod
-    def _remaining_sort_key(match: dict[str, Any]) -> tuple[int, int, str]:
-        seconds = match["remaining_seconds"]
+    def _remaining_sort_key(match: dict[str, Any]) -> tuple[int, int, str, str]:
+        seconds = match.get("remaining_seconds")
         if seconds is not None:
-            return (0, seconds, match["home"])
-        phase = 0 if match["half"] == 2 else 1 if match["half"] == 1 else 2
-        return (1, phase * 100_000 - (match["clock_seconds"] or 0), match["home"])
+            return (0, seconds, str(match.get("home") or "").casefold(), str(match.get("key") or ""))
+        return (1, 2**31 - 1, str(match.get("home") or "").casefold(), str(match.get("key") or ""))
 
 
 class SettingsStore:
@@ -213,7 +238,9 @@ class SettingsStore:
             saved = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             saved = {}
-        return {**DEFAULT_SETTINGS, **{key: saved[key] for key in DEFAULT_SETTINGS if key in saved}}
+        settings = {**DEFAULT_SETTINGS, **{key: saved[key] for key in DEFAULT_SETTINGS if key in saved}}
+        settings["ui_refresh_seconds"] = 20
+        return settings
 
     def get(self) -> dict[str, Any]:
         with self._lock:
@@ -221,11 +248,14 @@ class SettingsStore:
 
     def update(self, candidate: dict[str, Any]) -> dict[str, Any]:
         allowed = {
-            "ui_refresh_seconds": lambda value: isinstance(value, int) and 2 <= value <= 60,
+            "ui_refresh_seconds": lambda value: value == 20,
             "theme": lambda value: value in {"dark", "light"},
             "default_sort": lambda value: value in {"remaining", "clock", "name", "score"},
             "compact_mode": lambda value: isinstance(value, bool),
             "show_paused": lambda value: isinstance(value, bool),
+            "highlight_enabled": lambda value: isinstance(value, bool),
+            "highlight_goal_difference": lambda value: isinstance(value, int) and 1 <= value <= 10,
+            "highlight_remaining_seconds": lambda value: isinstance(value, int) and 15 <= value <= 600,
         }
         with self._lock:
             for key, validator in allowed.items():
