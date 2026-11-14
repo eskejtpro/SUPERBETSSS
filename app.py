@@ -33,6 +33,26 @@ DEFAULT_SETTINGS = {
     "highlight_enabled": True,
     "highlight_goal_difference": 3,
     "highlight_remaining_seconds": 90,
+    "highlight_row_tint": True,
+    "highlight_color": "#dc2626",
+    "potential_enabled": True,
+    "potential_goal_difference": 2,
+    "potential_remaining_seconds": 300,
+    "potential_min_total_goals": 2,
+    "potential_color": "#f59e0b",
+    "high_scoring_enabled": True,
+    "high_scoring_min_goals": 5,
+    "high_scoring_color": "#8b5cf6",
+    "close_finish_enabled": True,
+    "close_finish_remaining_seconds": 120,
+    "close_finish_color": "#0ea5e9",
+    "notify_enabled": True,
+    "notify_potential": True,
+    "notify_primary": True,
+    "notify_high_scoring": False,
+    "notify_close_finish": False,
+    "notify_sound": True,
+    "notify_cooldown_seconds": 120,
 }
 
 
@@ -58,7 +78,10 @@ def remaining_seconds(match: dict[str, Any]) -> int | None:
     half_seconds = (total_minutes // 2) * 60
     if clock > half_seconds:
         return None
-    return max((2 - half) * half_seconds + (half_seconds - clock), 0)
+    regular = max((2 - half) * half_seconds + (half_seconds - clock), 0)
+    added = max(0, parse_int(match.get("added_time_seconds")) or 0)
+    break_seconds = max(0, parse_int(match.get("break_seconds")) or 0)
+    return regular + added + (break_seconds if half == 1 else 0)
 
 
 def normalize_match(raw: dict[str, Any], observed_at: str) -> dict[str, Any]:
@@ -86,8 +109,23 @@ def normalize_match(raw: dict[str, Any], observed_at: str) -> dict[str, Any]:
         "is_live": True,
         "source_url": source_url,
         "observed_at": observed_at,
+        "added_time_seconds": max(0, parse_int(raw.get("addedTimeSeconds", raw.get("addedTime", raw.get("extraSeconds")))) or 0),
+        "break_seconds": max(0, parse_int(raw.get("breakSeconds", raw.get("halftimeBreakSeconds"))) or 0),
+        "added_time_note": str(raw.get("addedTimeNote") or "").strip(),
     }
     match["remaining_seconds"] = remaining_seconds(match)
+    observed_dt = datetime.fromisoformat(observed_at)
+    half_seconds = (match["format_minutes"] // 2) * 60 if match["format_minutes"] and match["format_minutes"] > 0 and match["format_minutes"] % 2 == 0 else 0
+    elapsed_from_start = ((half - 1) * half_seconds + min(clock_seconds, half_seconds) + (match["break_seconds"] if half == 2 else 0)) if half_seconds else clock_seconds
+    match["started_at"] = str(raw.get("startedAt") or (observed_dt - __import__("datetime").timedelta(seconds=elapsed_from_start)).isoformat())
+    match["estimated_end_at"] = (observed_dt + __import__("datetime").timedelta(seconds=match["remaining_seconds"])).isoformat() if match["remaining_seconds"] is not None else None
+    if not match["added_time_note"]:
+        note_parts = []
+        if match["added_time_seconds"]:
+            note_parts.append(f"Doliczony czas: +{match['added_time_seconds']} s")
+        if match["break_seconds"]:
+            note_parts.append(f"Przerwa w połowie: {match['break_seconds']} s")
+        match["added_time_note"] = " · ".join(note_parts) if note_parts else "Brak doliczonego czasu i przerw"
     match["score_label"] = (
         f"{match['home_score']}:{match['away_score']}"
         if match["home_score"] is not None and match["away_score"] is not None
@@ -195,6 +233,20 @@ class LiveState:
                 item = dict(match)
                 item["analysis"] = self._analysis.get(item["key"], "Brak analizy.")
                 matches.append(item)
+        for item in matches:
+            history = self.database.history(item["key"], 100)
+            for index in range(len(history) - 1, 0, -1):
+                current, previous = history[index], history[index - 1]
+                if current.get("home_score") is None or previous.get("home_score") is None or current.get("away_score") is None or previous.get("away_score") is None:
+                    continue
+                if current["home_score"] > previous["home_score"]:
+                    item["last_scorer_side"] = "home"
+                    break
+                if current["away_score"] > previous["away_score"]:
+                    item["last_scorer_side"] = "away"
+                    break
+            else:
+                item["last_scorer_side"] = None
             received_at = self._received_at
             source_count = self._last_source_count
         matches.sort(key=self._remaining_sort_key)
@@ -217,6 +269,10 @@ class LiveState:
             "source_online": source_online,
             "source_status": "online" if source_online else ("stale" if received_at else "waiting"),
             "source_interval_seconds": 20,
+            "server_time": utc_now(),
+            "superbet_time": utc_now(),
+            "superbet_time_label": None,
+            "is_demo": False,
         }
 
     @staticmethod
@@ -255,7 +311,27 @@ class SettingsStore:
             "show_paused": lambda value: isinstance(value, bool),
             "highlight_enabled": lambda value: isinstance(value, bool),
             "highlight_goal_difference": lambda value: isinstance(value, int) and 1 <= value <= 10,
-            "highlight_remaining_seconds": lambda value: isinstance(value, int) and 15 <= value <= 600,
+            "highlight_remaining_seconds": lambda value: type(value) is int and 15 <= value <= 600,
+            "highlight_row_tint": lambda value: isinstance(value, bool),
+            "highlight_color": lambda value: isinstance(value, str) and len(value) == 7 and value.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in value[1:]),
+            "potential_enabled": lambda value: isinstance(value, bool),
+            "potential_goal_difference": lambda value: type(value) is int and 1 <= value <= 9,
+            "potential_remaining_seconds": lambda value: type(value) is int and 30 <= value <= 1200,
+            "potential_min_total_goals": lambda value: type(value) is int and 0 <= value <= 20,
+            "potential_color": lambda value: isinstance(value, str) and len(value) == 7 and value.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in value[1:]),
+            "high_scoring_enabled": lambda value: isinstance(value, bool),
+            "high_scoring_min_goals": lambda value: type(value) is int and 2 <= value <= 20,
+            "high_scoring_color": lambda value: isinstance(value, str) and len(value) == 7 and value.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in value[1:]),
+            "close_finish_enabled": lambda value: isinstance(value, bool),
+            "close_finish_remaining_seconds": lambda value: type(value) is int and 15 <= value <= 600,
+            "close_finish_color": lambda value: isinstance(value, str) and len(value) == 7 and value.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in value[1:]),
+            "notify_enabled": lambda value: isinstance(value, bool),
+            "notify_potential": lambda value: isinstance(value, bool),
+            "notify_primary": lambda value: isinstance(value, bool),
+            "notify_high_scoring": lambda value: isinstance(value, bool),
+            "notify_close_finish": lambda value: isinstance(value, bool),
+            "notify_sound": lambda value: isinstance(value, bool),
+            "notify_cooldown_seconds": lambda value: type(value) is int and 0 <= value <= 3600,
         }
         with self._lock:
             for key, validator in allowed.items():
@@ -362,7 +438,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def respond_csv(self, matches: list[dict[str, Any]]) -> None:
         buffer = io.StringIO()
-        fields = ["competition", "home", "away", "home_score", "away_score", "half", "clock_label", "format_minutes", "status", "observed_at"]
+        fields = ["competition", "home", "away", "home_score", "away_score", "half", "clock_label", "format_minutes", "added_time_seconds", "break_seconds", "started_at", "estimated_end_at", "status", "observed_at"]
         writer = csv.DictWriter(buffer, fieldnames=fields)
         writer.writeheader(); writer.writerows(matches)
         body = buffer.getvalue().encode("utf-8-sig")
