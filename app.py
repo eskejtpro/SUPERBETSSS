@@ -31,6 +31,9 @@ DEFAULT_SETTINGS = {
     "compact_mode": False,
     "show_paused": True,
     "highlight_enabled": True,
+    "advantage_tracking_enabled": True,
+    "advantage_goal_threshold": 3,
+    "advantage_history_limit": 100,
     "highlight_goal_difference": 3,
     "highlight_remaining_seconds": 90,
     "highlight_row_tint": True,
@@ -167,6 +170,25 @@ class MatchDatabase:
                 )"""
             )
             connection.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_key_time ON snapshots(match_key, id DESC)")
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS advantage_history (
+                    match_key TEXT PRIMARY KEY,
+                    first_trigger_at TEXT NOT NULL,
+                    home TEXT NOT NULL,
+                    away TEXT NOT NULL,
+                    competition TEXT NOT NULL,
+                    score_at_trigger TEXT NOT NULL,
+                    leader_at_trigger TEXT NOT NULL,
+                    max_goal_difference INTEGER NOT NULL,
+                    half_at_trigger INTEGER,
+                    clock_at_trigger TEXT,
+                    started_at TEXT,
+                    source_url TEXT,
+                    latest_score TEXT NOT NULL,
+                    latest_observed_at TEXT NOT NULL
+                )"""
+            )
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_advantage_history_time ON advantage_history(first_trigger_at DESC)")
 
     def connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=5)
@@ -182,6 +204,71 @@ class MatchDatabase:
             connection.executemany(
                 "INSERT INTO snapshots(observed_at, match_key, payload) VALUES (?, ?, ?)", rows
             )
+
+    def record_advantage_events(self, matches: list[dict[str, Any]], threshold: int = 3) -> int:
+        threshold = max(3, min(10, int(threshold)))
+        rows = []
+        for match in matches:
+            home_score = parse_int(match.get("home_score"))
+            away_score = parse_int(match.get("away_score"))
+            if home_score is None or away_score is None:
+                continue
+            difference = abs(home_score - away_score)
+            if difference < threshold:
+                continue
+            leader = match["home"] if home_score > away_score else match["away"]
+            score_label = f"{home_score}:{away_score}"
+            rows.append((
+                match["key"], match["observed_at"], match["home"], match["away"],
+                match.get("competition") or "", score_label, leader, difference,
+                match.get("half"), match.get("clock_label") or "", match.get("started_at"),
+                match.get("source_url") or "", score_label, match["observed_at"],
+            ))
+        if not rows:
+            return 0
+        with self.connect() as connection:
+            connection.executemany(
+                """INSERT INTO advantage_history(
+                    match_key, first_trigger_at, home, away, competition, score_at_trigger,
+                    leader_at_trigger, max_goal_difference, half_at_trigger, clock_at_trigger,
+                    started_at, source_url, latest_score, latest_observed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(match_key) DO UPDATE SET
+                    max_goal_difference = MAX(advantage_history.max_goal_difference, excluded.max_goal_difference),
+                    leader_at_trigger = CASE
+                        WHEN excluded.max_goal_difference > advantage_history.max_goal_difference
+                        THEN excluded.leader_at_trigger ELSE advantage_history.leader_at_trigger END,
+                    score_at_trigger = CASE
+                        WHEN excluded.max_goal_difference > advantage_history.max_goal_difference
+                        THEN excluded.score_at_trigger ELSE advantage_history.score_at_trigger END,
+                    half_at_trigger = CASE
+                        WHEN excluded.max_goal_difference > advantage_history.max_goal_difference
+                        THEN excluded.half_at_trigger ELSE advantage_history.half_at_trigger END,
+                    clock_at_trigger = CASE
+                        WHEN excluded.max_goal_difference > advantage_history.max_goal_difference
+                        THEN excluded.clock_at_trigger ELSE advantage_history.clock_at_trigger END,
+                    latest_score = excluded.latest_score,
+                    latest_observed_at = excluded.latest_observed_at""",
+                rows,
+            )
+        return len(rows)
+
+    def advantage_history(self, limit: int = 100) -> list[dict[str, Any]]:
+        safe_limit = min(max(int(limit), 1), 500)
+        with self.connect() as connection:
+            connection.row_factory = sqlite3.Row
+            rows = connection.execute(
+                """SELECT * FROM advantage_history
+                   ORDER BY first_trigger_at DESC LIMIT ?""",
+                (safe_limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def clear_advantage_history(self) -> int:
+        with self.connect() as connection:
+            cursor = connection.execute("DELETE FROM advantage_history")
+            return cursor.rowcount
+
 
     def history(self, match_key: str, limit: int) -> list[dict[str, Any]]:
         with self.connect() as connection:
@@ -221,6 +308,11 @@ class LiveState:
             self._matches = current
             self._received_at = received_at
             self._last_source_count = len(raw_matches)
+        settings = SETTINGS.get()
+        if settings.get("advantage_tracking_enabled", True):
+            self.database.record_advantage_events(
+                normalized, settings.get("advantage_goal_threshold", 3)
+            )
         self.database.save_many(normalized)
         return len(normalized)
 
@@ -330,6 +422,9 @@ class SettingsStore:
             "compact_mode": lambda value: isinstance(value, bool),
             "show_paused": lambda value: isinstance(value, bool),
             "highlight_enabled": lambda value: isinstance(value, bool),
+            "advantage_tracking_enabled": lambda value: isinstance(value, bool),
+            "advantage_goal_threshold": lambda value: type(value) is int and 3 <= value <= 10,
+            "advantage_history_limit": lambda value: type(value) is int and 10 <= value <= 500,
             "highlight_goal_difference": lambda value: isinstance(value, int) and 1 <= value <= 10,
             "highlight_remaining_seconds": lambda value: type(value) is int and 15 <= value <= 600,
             "highlight_row_tint": lambda value: isinstance(value, bool),
@@ -376,7 +471,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Private-Network", "true")
         super().end_headers()
 
@@ -399,6 +494,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             except ValueError:
                 limit = 30
             self.respond_json({"history": DATABASE.history(key, limit) if key else []})
+        elif parsed.path == "/api/advantage-history":
+            try:
+                limit = int(parse_qs(parsed.query).get("limit", [str(SETTINGS.get().get("advantage_history_limit", 100))])[0])
+            except ValueError:
+                limit = SETTINGS.get().get("advantage_history_limit", 100)
+            self.respond_json({"matches": DATABASE.advantage_history(limit)})
         elif parsed.path == "/api/settings":
             self.respond_json(SETTINGS.get())
         elif parsed.path == "/api/export.json":
@@ -407,6 +508,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.respond_csv(STATE.live_payload()["matches"])
         else:
             self.serve_static(parsed.path)
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        if urlparse(self.path).path != "/api/advantage-history":
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        deleted = DATABASE.clear_advantage_history()
+        self.respond_json({"ok": True, "deleted": deleted})
 
     def do_PUT(self) -> None:  # noqa: N802
         if urlparse(self.path).path != "/api/settings":

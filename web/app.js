@@ -4,6 +4,9 @@ const DEFAULT_SETTINGS = {
   show_paused: true,
   highlight_row_tint: true,
   highlight_enabled: true,
+  advantage_tracking_enabled: true,
+  advantage_goal_threshold: 3,
+  advantage_history_limit: 100,
   highlight_goal_difference: 3,
   highlight_remaining_seconds: 90,
   highlight_color: '#dc2626',
@@ -46,6 +49,7 @@ const state = {
   notifyHistory: [],
   notifyTotalSent: 0,
   notifyCollapsed: false,
+  advantageHistory: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -624,6 +628,9 @@ function applySettingsToForm(s) {
   $('uiRefresh').value = '20';
   $('themeSelect').value = s.theme || 'dark';
   $('highlightRowTint').checked = Boolean(s.highlight_row_tint);
+  $('advantageTrackingEnabled').checked = Boolean(s.advantage_tracking_enabled);
+  $('advantageGoalThreshold').value = String(s.advantage_goal_threshold ?? 3);
+  $('advantageHistoryLimit').value = String(s.advantage_history_limit ?? 100);
   $('highlightEnabled').checked = Boolean(s.highlight_enabled);
   $('highlightGoalDifference').value = String(s.highlight_goal_difference ?? 3);
   $('highlightRemainingSeconds').value = String(s.highlight_remaining_seconds ?? 90);
@@ -660,6 +667,9 @@ function readSettingsFromForm() {
     theme: $('themeSelect').value === 'light' ? 'light' : 'dark',
     show_paused: true,
     highlight_row_tint: $('highlightRowTint').checked,
+    advantage_tracking_enabled: $('advantageTrackingEnabled').checked,
+    advantage_goal_threshold: Math.max(3, Math.min(10, Math.trunc(Number($('advantageGoalThreshold').value) || 3))),
+    advantage_history_limit: Math.max(10, Math.min(500, Math.trunc(Number($('advantageHistoryLimit').value) || 100))),
     highlight_enabled: $('highlightEnabled').checked,
     highlight_goal_difference: Math.max(1, Math.min(10, Math.trunc(Number($('highlightGoalDifference').value) || 3))),
     highlight_remaining_seconds: Math.max(15, Math.min(600, Math.trunc(Number($('highlightRemainingSeconds').value) || 90))),
@@ -840,6 +850,47 @@ async function dispatchSystemNotification(title, body, tagKey, matchKey) {
   } catch (_) {}
 }
 
+async function loadAdvantageHistory() {
+  try {
+    const limit = Number(state.settings.advantage_history_limit || 100);
+    const response = await fetch(`/api/advantage-history?limit=${limit}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('history');
+    const data = await response.json();
+    state.advantageHistory = data.matches || [];
+    renderAdvantageHistory();
+  } catch (error) {
+    console.warn('Nie udało się pobrać historii przewag:', error);
+    $('advantageHistoryBody').innerHTML = '<tr><td colspan="7" class="muted">Nie udało się pobrać archiwum.</td></tr>';
+  }
+}
+
+function renderAdvantageHistory() {
+  const rows = state.advantageHistory || [];
+  $('advantageHistoryCount').textContent = `${rows.length} zapisanych meczów`;
+  if (!rows.length) {
+    $('advantageHistoryBody').innerHTML = '<tr><td colspan="7" class="muted">Brak meczów z przewagą spełniającą ustawiony próg. Archiwum zapisuje się automatycznie podczas odbioru danych LIVE.</td></tr>';
+    return;
+  }
+  $('advantageHistoryBody').innerHTML = rows.map((item) => {
+    const leader = item.leader_at_trigger === item.home ? item.home : item.away;
+    const time = item.first_trigger_at ? new Date(item.first_trigger_at).toLocaleString('pl-PL') : '—';
+    return `<tr><td>${esc(time)}</td><td class="team-cell">${esc(item.home)} — ${esc(item.away)}<small>${esc(item.competition || '')}</small></td><td class="score">${esc(item.score_at_trigger)}</td><td>${esc(leader)}</td><td><strong>+${esc(item.max_goal_difference)}</strong></td><td>${esc(item.latest_score)}</td><td>${esc(item.clock_at_trigger || '—')} · ${esc(item.half_at_trigger ? item.half_at_trigger + '. połowa' : '—')}</td></tr>`;
+  }).join('');
+}
+
+async function clearAdvantageHistory() {
+  if (!window.confirm('Usunąć całą zapisaną historię meczów z przewagą? Tej operacji nie można cofnąć.')) return;
+  try {
+    const response = await fetch('/api/advantage-history', { method: 'DELETE' });
+    if (!response.ok) throw new Error('delete');
+    state.advantageHistory = [];
+    renderAdvantageHistory();
+    showToast('Archiwum wyczyszczone', 'Historia meczów z przewagą została usunięta.', '#63e6be');
+  } catch (_) {
+    showToast('Błąd', 'Nie udało się wyczyścić historii przewag.', '#f59e0b');
+  }
+}
+
 function renderNotifyFeed() {
   const feedEl = $('notifyFeed');
   if (!feedEl) return;
@@ -992,6 +1043,7 @@ async function saveSettings(event) {
     document.body.classList.toggle('light', state.settings.theme === 'light');
     $('settingsDialog').close();
     render();
+    await loadAdvantageHistory();
     startPolling();
   } catch (err) {
     console.error('Nie udało się zapisać ustawień. Sprawdź, czy serwer działa.', err);
@@ -1080,11 +1132,14 @@ $('notifyToggleChip').addEventListener('click', () => {
   $(id).addEventListener('change', saveNotifySettings);
 });
 
+$('refreshAdvantageHistoryBtn').addEventListener('click', loadAdvantageHistory);
+$('clearAdvantageHistoryBtn').addEventListener('click', clearAdvantageHistory);
 initSwatches();
 updateHeroClocks();
 updateNotifyStatusUI();
 registerServiceWorker();
 loadSettings().then(() => {
   loadLive();
+  loadAdvantageHistory();
   startPolling();
 });
