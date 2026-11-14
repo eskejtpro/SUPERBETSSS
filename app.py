@@ -208,25 +208,28 @@ class MatchDatabase:
     def record_advantage_events(self, matches: list[dict[str, Any]], threshold: int = 3) -> int:
         threshold = max(3, min(10, int(threshold)))
         rows = []
-        for match in matches:
-            home_score = parse_int(match.get("home_score"))
-            away_score = parse_int(match.get("away_score"))
-            if home_score is None or away_score is None:
-                continue
-            difference = abs(home_score - away_score)
-            if difference < threshold:
-                continue
-            leader = match["home"] if home_score > away_score else match["away"]
-            score_label = f"{home_score}:{away_score}"
-            rows.append((
-                match["key"], match["observed_at"], match["home"], match["away"],
-                match.get("competition") or "", score_label, leader, difference,
-                match.get("half"), match.get("clock_label") or "", match.get("started_at"),
-                match.get("source_url") or "", score_label, match["observed_at"],
-            ))
-        if not rows:
-            return 0
         with self.connect() as connection:
+            for match in matches:
+                home_score = parse_int(match.get("home_score"))
+                away_score = parse_int(match.get("away_score"))
+                if home_score is None or away_score is None:
+                    continue
+                difference = abs(home_score - away_score)
+                exists = connection.execute(
+                    "SELECT 1 FROM advantage_history WHERE match_key = ?", (match["key"],)
+                ).fetchone() is not None
+                if difference < threshold and not exists:
+                    continue
+                leader = match["home"] if home_score > away_score else match["away"]
+                score_label = f"{home_score}:{away_score}"
+                rows.append((
+                    match["key"], match["observed_at"], match["home"], match["away"],
+                    match.get("competition") or "", score_label, leader, difference,
+                    match.get("half"), match.get("clock_label") or "", match.get("started_at"),
+                    match.get("source_url") or "", score_label, match["observed_at"],
+                ))
+            if not rows:
+                return 0
             connection.executemany(
                 """INSERT INTO advantage_history(
                     match_key, first_trigger_at, home, away, competition, score_at_trigger,
