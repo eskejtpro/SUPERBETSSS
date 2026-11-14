@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Live FIFA Analyzer Bridge",
+  "version": "0.1.0",
+  "description": "Lokalny, tylko do odczytu most widocznych meczów e-piłki live.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://superbet.pl/*", "http://127.0.0.1:8765/*"],
+  "background": {"service_worker": "background.js"},
+  "content_scripts": [{"matches": ["https://superbet.pl/zaklady-bukmacherskie/e-pilka-nozna/live*"], "js": ["content.js"], "run_at": "document_idle"}],
+  "action": {"default_title": "Live FIFA Analyzer", "default_popup": "popup.html"}
+}

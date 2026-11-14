@@ -1,0 +1,1 @@
+# Brak zewnętrznych zależności. Program korzysta ze standardowej biblioteki Python 3.12+.

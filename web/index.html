@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live FIFA Analyzer</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">L</span><div><strong>Live FIFA Analyzer</strong><small>obserwator meczów e-piłki</small></div></div>
+      <div class="top-actions"><span id="connectionBadge" class="badge badge-warn">Łączenie…</span><button id="settingsBtn" class="icon-btn" title="Ustawienia">⚙</button></div>
+    </header>
+    <main>
+      <section class="hero"><div><p class="eyebrow">CENTRUM LIVE</p><h1>Aktualne mecze</h1><p class="muted">Lista jest odświeżana lokalnie i sortowana od spotkania najbliższego zakończenia.</p></div><div class="hero-meta"><span id="lastUpdate">Ostatni odczyt: —</span><button id="refreshBtn" class="primary">Odśwież teraz</button></div></section>
+      <section class="stats-grid">
+        <article class="stat-card"><span class="stat-label">Mecze live</span><strong id="totalMatches">0</strong><span class="stat-note">w aktywnym źródle</span></article>
+        <article class="stat-card accent"><span class="stat-label">Najbliżej końca</span><strong id="nextMatch">—</strong><span id="nextMatchNote" class="stat-note">brak danych</span></article>
+        <article class="stat-card"><span class="stat-label">W drugiej połowie</span><strong id="secondHalf">0</strong><span class="stat-note">w tej chwili</span></article>
+        <article class="stat-card"><span class="stat-label">Stan źródła</span><strong id="sourceAge">—</strong><span id="sourceNote" class="stat-note">oczekiwanie</span></article>
+      </section>
+      <section class="workspace">
+        <div class="panel list-panel">
+          <div class="panel-head"><div><h2>Mecze live</h2><span id="resultCount" class="muted">0 wyników</span></div><div class="view-toggle"><button class="view-btn active" data-view="table">Tabela</button><button class="view-btn" data-view="compact">Karty</button></div></div>
+          <div class="filters"><label class="search"><span>⌕</span><input id="searchInput" type="search" placeholder="Szukaj drużyny, gracza lub ligi"></label><select id="halfFilter"><option value="all">Wszystkie połowy</option><option value="1">1. połowa</option><option value="2">2. połowa</option></select><select id="statusFilter"><option value="all">Wszystkie statusy</option><option value="aktywny">Aktywne</option><option value="oferta wstrzymana">Wstrzymane</option></select><select id="sortSelect"><option value="remaining">Najbliżej końca</option><option value="clock">Najnowszy czas</option><option value="name">Nazwa meczu</option><option value="score">Najwięcej goli</option></select></div>
+          <div id="tableView" class="table-wrap"><table><thead><tr><th>Do końca</th><th>Mecz</th><th>Wynik</th><th>Połowa / czas</th><th>Liga</th><th>Status</th></tr></thead><tbody id="matchesBody"></tbody></table></div>
+          <div id="compactView" class="compact-grid hidden"></div>
+          <div id="emptyState" class="empty hidden"><div class="empty-icon">◌</div><h3>Brak meczów spełniających filtr</h3><p>Sprawdź połączenie źródła live albo wyczyść filtry.</p><button id="clearFilters" class="secondary">Wyczyść filtry</button></div>
+        </div>
+        <aside class="panel detail-panel"><div class="panel-head"><div><h2>Szczegóły meczu</h2><span class="muted">wybierz wiersz z tabeli</span></div><span id="detailLive" class="live-dot hidden">LIVE</span></div><div id="detailEmpty" class="detail-empty">Wybierz mecz, aby zobaczyć analizę automatyczną i historię odczytów.</div><div id="detailContent" class="hidden"><div class="match-title"><span id="detailCompetition" class="eyebrow">—</span><h3 id="detailTeams">—</h3><div id="detailScore" class="big-score">—</div></div><div class="detail-grid"><div><span>Połowa</span><strong id="detailHalf">—</strong></div><div><span>Czas</span><strong id="detailClock">—</strong></div><div><span>Format</span><strong id="detailFormat">—</strong></div><div><span>Do końca</span><strong id="detailRemaining">—</strong></div></div><div class="analysis-box"><span class="eyebrow">ANALIZA AUTOMATYCZNA</span><p id="detailAnalysis">—</p></div><h4>Ostatnie odczyty</h4><div id="historyList" class="history-list"></div></div></aside>
+      </section>
+    </main>
+    <footer><span>Źródło: lokalny most Chrome · tylko odczyt</span><span id="footerVersion">Live FIFA Analyzer 0.2.0</span></footer>
+  </div>
+  <dialog id="settingsDialog"><form method="dialog" id="settingsForm"><div class="dialog-head"><h2>Ustawienia panelu</h2><button value="cancel" class="icon-btn">×</button></div><label>Odświeżanie panelu<select id="uiRefresh"><option value="3">Co 3 sekundy</option><option value="5">Co 5 sekund</option><option value="10">Co 10 sekund</option><option value="20">Co 20 sekund</option></select></label><label>Motyw<select id="themeSelect"><option value="dark">Ciemny</option><option value="light">Jasny</option></select></label><label class="check-row"><input id="showPaused" type="checkbox"> Pokaż mecze ze wstrzymaną ofertą</label><div class="dialog-actions"><button value="cancel" class="secondary">Anuluj</button><button id="saveSettings" value="default" class="primary">Zapisz ustawienia</button></div></form></dialog>
+  <script src="/app.js"></script>
+</body>
+</html>
