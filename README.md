@@ -6,7 +6,7 @@ Po uruchomieniu panel jest dostępny pod `http://127.0.0.1:8765`.
 
 Uruchomienie: `python app.py` albo dwukrotnie kliknij `Uruchom panel.bat`.
 
-Pełne przygotowanie środowiska opisuje [SETUP.md](SETUP.md).
+Pełne przygotowanie środowiska opisuje [SETUP.md](SETUP.md). Dokumentacja techniczna i prompt przekazania projektu do Google AI Studio znajdują się w [docs/GOOGLE_AI_STUDIO_HANDOFF.md](docs/GOOGLE_AI_STUDIO_HANDOFF.md) oraz [docs/GOOGLE_AI_STUDIO_PROMPT.md](docs/GOOGLE_AI_STUDIO_PROMPT.md).
 
 ## Zakres monitoringu LIVE
 

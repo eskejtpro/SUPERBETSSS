@@ -7,4 +7,4 @@
 5. Uruchom `python app.py`.
 6. Otwórz `http://127.0.0.1:8765`, jeśli przeglądarka nie otworzy panelu automatycznie.
 
-Dodatek odczytuje tylko widoczne dane meczów e-piłki nożnej co 20 sekund. Panel WWW może odświeżać swój widok co 3, 5, 10 lub 20 sekund.
+Dodatek odczytuje tylko widoczne dane meczów e-piłki nożnej co 20 sekund. Panel WWW odświeża swój widok co 20 sekund. Ustawienie częstotliwości odświeżania jest obecnie stałe i backend wymusza wartość 20 sekund.
