@@ -270,7 +270,7 @@ class LiveState:
             "source_status": "online" if source_online else ("stale" if received_at else "waiting"),
             "source_interval_seconds": 20,
             "server_time": utc_now(),
-            "superbet_time": utc_now(),
+            "superbet_time": None,
             "superbet_time_label": None,
             "is_demo": False,
         }

@@ -473,7 +473,7 @@ function updateHeroClocks() {
         minute: '2-digit',
         second: '2-digit',
       });
-      const suffix = state.isDemo ? 'Warszawa · DEMO' : state.sourceOnline ? 'Warszawa · LIVE' : 'Warszawa';
+      const suffix = 'czas lokalny';
       superbetEl.textContent = `${sbStr} (${suffix})`;
     }
   }
