@@ -9,7 +9,7 @@ import sqlite3
 import threading
 import webbrowser
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -117,8 +117,8 @@ def normalize_match(raw: dict[str, Any], observed_at: str) -> dict[str, Any]:
     observed_dt = datetime.fromisoformat(observed_at)
     half_seconds = (match["format_minutes"] // 2) * 60 if match["format_minutes"] and match["format_minutes"] > 0 and match["format_minutes"] % 2 == 0 else 0
     elapsed_from_start = ((half - 1) * half_seconds + min(clock_seconds, half_seconds) + (match["break_seconds"] if half == 2 else 0)) if half_seconds else clock_seconds
-    match["started_at"] = str(raw.get("startedAt") or (observed_dt - __import__("datetime").timedelta(seconds=elapsed_from_start)).isoformat())
-    match["estimated_end_at"] = (observed_dt + __import__("datetime").timedelta(seconds=match["remaining_seconds"])).isoformat() if match["remaining_seconds"] is not None else None
+    match["started_at"] = str(raw.get("startedAt") or (observed_dt - timedelta(seconds=elapsed_from_start)).isoformat())
+    match["estimated_end_at"] = (observed_dt + timedelta(seconds=match["remaining_seconds"])).isoformat() if match["remaining_seconds"] is not None else None
     if not match["added_time_note"]:
         note_parts = []
         if match["added_time_seconds"]:
@@ -233,6 +233,8 @@ class LiveState:
                 item = dict(match)
                 item["analysis"] = self._analysis.get(item["key"], "Brak analizy.")
                 matches.append(item)
+            received_at = self._received_at
+            source_count = self._last_source_count
         for item in matches:
             history = self.database.history(item["key"], 100)
             for index in range(len(history) - 1, 0, -1):
@@ -247,8 +249,6 @@ class LiveState:
                     break
             else:
                 item["last_scorer_side"] = None
-            received_at = self._received_at
-            source_count = self._last_source_count
         matches.sort(key=self._remaining_sort_key)
         age_seconds = None
         if received_at:

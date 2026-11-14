@@ -1,13 +1,3 @@
-let pollTimer;
-let tickTimer;
-function startPolling() {
-  clearInterval(pollTimer);
-  clearInterval(tickTimer);
-  state.nextRefreshAtMs = Date.now() + 20_000;
-  pollTimer = setInterval(loadLive, 20_000);
-  tickTimer = setInterval(render, 1_000);
-}
-
 const DEFAULT_SETTINGS = {
   ui_refresh_seconds: 20,
   theme: 'dark',
@@ -1030,6 +1020,14 @@ function initSwatches() {
 
 let pollTimer;
 let tickTimer;
+function startPolling() {
+  clearInterval(pollTimer);
+  clearInterval(tickTimer);
+  state.nextRefreshAtMs = Date.now() + 20_000;
+  pollTimer = setInterval(loadLive, 20_000);
+  tickTimer = setInterval(render, 1_000);
+}
+
 $('refreshBtn').addEventListener('click', () => {
   loadLive();
   startPolling();
